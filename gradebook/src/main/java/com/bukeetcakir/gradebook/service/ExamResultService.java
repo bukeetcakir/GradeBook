@@ -1,7 +1,9 @@
 package com.bukeetcakir.gradebook.service;
 
+import com.bukeetcakir.gradebook.dto.examResult.AverageExamResultResponse;
 import com.bukeetcakir.gradebook.dto.examResult.ExamResultResponse;
 import com.bukeetcakir.gradebook.dto.examResult.ExamResultSaveRequest;
+import com.bukeetcakir.gradebook.entity.Course;
 import com.bukeetcakir.gradebook.mapper.ExamResultMapper;
 import com.bukeetcakir.gradebook.repository.CourseRepository;
 import com.bukeetcakir.gradebook.repository.ExamResultRepository;
@@ -9,6 +11,7 @@ import com.bukeetcakir.gradebook.repository.StudentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -24,13 +27,22 @@ public class ExamResultService {
         return ExamResultMapper.INSTANCE.toExamResultResponses(examResults);
     }
 
-    //    public ExamResultResponse getExamResultById(Long examResultId) {
-//        var course = examResultRepository.findById(examResultId)
-//                .orElseThrow(() -> new RuntimeException("ExamResult not found"));
-//        return ExamResultMapper.INSTANCE.toExamResultResponse(course);
-//    }
+    public List<AverageExamResultResponse> getExamResultsWithAverageScore(Long studentId) {
+        List<AverageExamResultResponse> examResults = new ArrayList<>();
+        var courseIds = examResultRepository.findCourseIdsByStudentId(studentId);
+        for (var courseId : courseIds) {
+            if (isCourseCompleted(studentId, courseId)) {
+                var scores = examResultRepository.findScoresByStudentIdAndCourseId(studentId, courseId);
+                var averageScore = examResultRepository.getAverageScoreByStudentIdAndCourseId(studentId, courseId);
+                var course = courseRepository.findById(courseId).orElseThrow(() -> new RuntimeException("Course not found"));
+                examResults.add(new AverageExamResultResponse(course.getName(), scores, averageScore));
+            }
+        }
+        return examResults;
+    }
+
     public ExamResultResponse saveExamResult(ExamResultSaveRequest request) {
-        if (isCourseCompleted(request)) {
+        if (isCourseCompleted(request.studentId(), request.courseId())) {
             throw new RuntimeException("Course already completed");
         }
         var course = courseRepository.findById(request.courseId())
@@ -58,8 +70,8 @@ public class ExamResultService {
     }
 
 
-    private boolean isCourseCompleted(ExamResultSaveRequest request) {
-        var completedScoreCount = examResultRepository.countExamResultByStudentIdAndCourseId(request.studentId(), request.courseId());
+    private boolean isCourseCompleted(Long studentId, Long courseId) {
+        var completedScoreCount = examResultRepository.countExamResultByStudentIdAndCourseId(studentId, courseId);
         return completedScoreCount == COMPLETED_SCORE_THRESHOLD;
     }
 }
